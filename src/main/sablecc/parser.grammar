@@ -1,0 +1,320 @@
+Package compiler;
+
+
+Helpers
+   
+    all = [0 .. 0xFFFF];
+    sp = ' ';
+    lf = 0x000a;
+    cr = 0x000d;
+    ff = 0x000c;
+    ht = 0x0009; 
+    eol = cr lf | cr | lf;
+    not_cr_lf = [all - [cr + lf]];
+
+    letter = ['a'..'z'] | ['A'..'Z'];
+    digit = ['0'..'9'];
+    hex_digit = [digit + [['a' .. 'f'] + ['A' .. 'F']]];
+
+    pos = ['1'..'9'];
+    name_part = letter (letter | digit)*;
+    keywords = 'and' + 'char' + 'div';
+    name = name_part ('_' | name_part)* ;
+
+    hex_char = 'x' hex_digit+;
+
+    white_space = (sp | ht | ff | eol)*;
+    escape_sequence = ('\n' | '\t' | '\r' | '\0' | '\\'  | '\"' | '\'hex_char | '\'''' ) ;// '\'
+
+    singlec = [not_cr_lf - [['\' + '"'] + '''] ];
+    //singlec =  [not_cr_lf - bslash];
+
+Tokens
+
+
+    condoperations = '=' | '#' | '<' | '>' | '<=' | '>=' ;
+
+    multiple_comment = '$$' all* '$$';
+    single_comment = '$' [not_cr_lf-'$']* eol; //[-'$'] 
+    white_space = white_space;
+
+    //keywords
+
+    keyword_and = 'and';
+    keyword_char = 'char';
+    keyword_div = 'div';
+    keyword_do = 'do';
+    keyword_else = 'else';
+    keyword_fun = 'fun';
+    keyword_if = 'if';
+    keyword_int = 'int';
+    keyword_mod = 'mod';
+    keyword_not = 'not';
+    keyword_nothing = 'nothing';
+    keyword_or = 'or';
+    keyword_ref = 'ref';
+    keyword_return = 'return';
+    keyword_then = 'then';
+    keyword_var = 'var';
+    keyword_while = 'while';
+
+    keword_var = 'var';
+
+    id = name;
+
+    //symbolikoitelestes
+
+    token_plus= '+';
+    token_minus = '-';
+    token_star = '*';
+    token_slash = '/';
+    token_hash = '#';
+    token_equal = '=';
+    token_less = '<';
+    token_greater = '>';
+    token_lesseq = '<=';
+    token_greatereq = '>=';
+    token_emptymatr = '[]';
+    
+    //diaxwristes
+
+    token_lparen = '(';
+    token_rparen = ')';
+    token_lbracket = '[';
+    token_rbracket = ']';
+    token_lbrace = '{';
+    token_rbrace = '}';
+    token_comma = ',';
+    token_semicolon = ';';
+    token_colon = ':';
+    token_assign = '<-';
+
+
+    
+    
+
+    //literals pali
+
+    literal_num = digit+ ;
+    erroneous_number = (digit)+ (letter|'_')+;
+    literal_char ='''(singlec|escape_sequence) ''';
+    literal_string ='"' (singlec|escape_sequence)* '"';
+
+
+Ignored Tokens
+    white_space,single_comment,multiple_comment;
+
+Productions
+
+
+    goal {-> prog} = {start} func_def {-> New prog(func_def.func_def)}
+            ; 
+    func_def {-> func_def} = {func_def} header local_def_list block {->New func_def(header.header,[local_def_list.local_def],[block.stmt])}
+    ;
+
+    local_def_list {-> local_def*} = local_def* {-> [local_def.local_def]}  
+                    ;      
+    
+
+    local_def{-> local_def} = {func_def}  func_def  {-> New local_def.func_def(func_def.func_def)}
+              | {func_decl} func_decl  {-> New local_def.func_decl(func_decl.func_decl)}
+              | {var_def}   var_def  {->New local_def.var_def(var_def.var_def)}
+              ;
+
+    header {-> header} = {header}   keyword_fun id token_lparen fpar_def_list? token_rparen token_colon ret_type {-> New header(id,[fpar_def_list.param],ret_type)};
+    
+    fpar_def_list{->param*} = {singleparam}   fpar_def {-> [fpar_def.param]}
+                            | {multiparams}   fpar_def_list token_semicolon fpar_def {-> [fpar_def_list.param,fpar_def.param]};
+    fpar_def {->param} =  keyword_ref? fpar_vartype_list token_colon fpar_type {-> New param(keyword_ref,[fpar_vartype_list.id],fpar_type)}
+             ;                        
+    
+    fpar_vartype_list {-> id*} = {typeparamsingle}   id {-> [id]}
+                                | {typeparamsmulti}   fpar_vartype_list token_comma id {-> [fpar_vartype_list.id,id]}
+                                ;
+    
+    data_type {->data_type}= {int}   keyword_int {-> New data_type.int(keyword_int)} 
+              | {char}  keyword_char {-> New data_type.char(keyword_char)}
+              ;
+
+    ret_type{-> ret_type} = {dtype} data_type {-> New  ret_type.data_type(data_type.data_type)}
+             | {nothing}    keyword_nothing {-> New ret_type.nothing(keyword_nothing)}//{-> New ret_type(nothing)}
+             ;   
+  
+    type {->type}= {type} data_type dimens_list {->New type(data_type.data_type,[dimens_list.literal_num])}
+         ;
+
+    dimarr {->literal_num} = token_lbracket literal_num token_rbracket {-> literal_num}
+           ;
+    
+    dimens_list {->literal_num*}=    dimarr*{-> [dimarr.literal_num]};          
+                
+    var_def {-> var_def} = {vardef}  keyword_var var_def_list token_colon type token_semicolon {->New var_def([var_def_list.id],type.type)};
+
+    var_def_list {-> id*}  =  {singlevardef}  id  {->[id]}
+                          |  {multivardef}   var_def_list token_comma id {-> [var_def_list.id,id]}
+                          ;
+    fpar_type{->fpar_type} = {fpartype} data_type token_emptymatr? dimens_list {->New  fpar_type(data_type.data_type,token_emptymatr,[dimens_list.literal_num])}  
+              ;  
+
+    func_decl{->func_decl} = {funcdecl}  header token_semicolon{-> New func_decl(header.header)};   
+
+    func_return{->stmt} = {return}keyword_return expr? token_semicolon {-> New stmt.return(expr.expr)};
+
+
+    /*l_value {-> l_value}    = {idname}  id  {-> New l_value.id(id)}
+                            | {literal_string} literal_string {-> New l_value.string(literal_string)}
+                            | {l_value_arr} l_value  token_lbracket expr token_rbracket  {-> New l_value.larr(l_value.l_value,expr.expr)}
+                            ;*/
+    l_value {->l_value} =  {idname}  id  exprm{-> New l_value.id(id,[exprm.expr])} 
+                            |{literal_string} literal_string exprm {-> New l_value.string(literal_string,[exprm.expr])} ;                    
+     
+    exprm {->expr*}    =  exprm_member* {->[exprm_member.expr]};
+    exprm_member{->expr} =  token_lbracket expr token_rbracket{->expr.expr} ;                
+    stmt_list {-> stmt*} = stmt* {-> [stmt.stmt]};
+    stmt {-> stmt*}
+        = {noop} noop             {-> []}
+        | {assignment} assignment {-> [assignment.stmt]}
+        | {if} if                 {-> [if.stmt]}
+        | {block} block           {-> [block.stmt]}
+        | {func_call} func_call   {-> [New stmt.func_call(func_call.func_call)]}
+        | {while} while           {-> [while.stmt]}
+        | {return} func_return    {-> [func_return.stmt]}; 
+
+    noop = token_semicolon;
+    block {-> stmt*} = token_lbrace stmt_list token_rbrace                 {-> [stmt_list.stmt]};
+    assignment {-> stmt} = l_value token_assign expr token_semicolon  {-> New stmt.assign(l_value.l_value,expr.expr)};
+    while {-> stmt} = keyword_while cond keyword_do stmt                        {-> New stmt.while(cond.cond,[stmt.stmt])};
+    while_with_else {-> stmt} = keyword_while cond keyword_do stmt_with_else    {-> New stmt.while(cond.cond,[stmt_with_else.stmt])};
+
+    /*if {-> stmt*} = if_header if_trail {-> [if_trail.stmt]};
+    if_header = keyword_if cond keyword_then;
+    if_trail {-> stmt}
+        = {no_else} [then]:stmt {-> New stmt.if([then.stmt], [])}
+        | {with_else} [then]:stmt_with_else keyword_else [else]:stmt {-> New stmt.if([then.stmt], [else.stmt])};*/
+
+    if{->stmt*} =   {no_else} keyword_if cond keyword_then [then]:stmt {-> [New stmt.if(cond.cond,[then.stmt], [])]}
+                    | {with_else} keyword_if cond keyword_then [then]:stmt_with_else keyword_else [else]:stmt {-> [New stmt.if(cond.cond,[then.stmt], [else.stmt])]};   
+
+    stmt_with_else {-> stmt*}
+        = {noop} noop             {-> []}
+        | {assignment} assignment {-> [assignment.stmt]}
+        | {if} if_else            {-> [if_else.stmt]}
+        | {block} block           {-> [block.stmt]}
+        | {func_call} func_call   {-> [New stmt.func_call(func_call.func_call)]}
+        | {while} while_with_else {-> [while_with_else.stmt]}
+        | {return} func_return    {-> [func_return.stmt]} ;
+
+
+    if_else {-> stmt} = keyword_if cond keyword_then [then]:stmt_with_else keyword_else [else]:stmt_with_else
+        {-> New stmt.if(cond.cond,[then.stmt], [else.stmt])};
+
+
+    expr {-> expr} =  {term}  term                          {-> term.expr}
+         |  {add}   [left]:expr token_plus [right]:term     {-> New expr.add(left.expr, right.expr)}
+         |  {sub}   [left]:expr token_minus [right]:term    {-> New expr.sub(left.expr, right.expr)}
+         ;
+
+    term {-> expr} =  {fact}  fact {-> fact.expr}
+         |  {mult}  [left]:term token_star [right]:fact     {-> New expr.mult(left.expr, right.expr)}
+         |   {div}   [left]:term keyword_div [right]:fact   {-> New expr.div(left.expr, right.expr)}
+         |   {mod}   [left]:term keyword_mod [right]:fact   {-> New expr.mod(left.expr, right.expr)}
+
+        ;
+
+    fact {-> expr} =  {func_call} func_call     {-> New expr.func_call(func_call.func_call)}
+         |  {l_value} l_value                   {-> New expr.l_value(l_value.l_value)}
+         |  {charnum}   literal_char            {-> New expr.charnum(literal_char)}     
+         |  {number}    literal_num             {-> New expr.number(literal_num)}
+         |  {parens}    token_lparen expr token_rparen  {-> expr.expr}
+         |  {negative} token_minus fact                 {-> New expr.negative(fact.expr)} //negative.expr
+         |  {positive} token_plus fact {-> fact.expr}
+         ;  
+
+    expr_list {-> expr*}    = {singleexpr}    expr      {-> [expr.expr]}
+                            | {multiexpr}     expr_list token_comma expr {-> [expr_list.expr,expr.expr]};
+
+
+    cond {-> cond} = {cond_f} cond_f                    {-> cond_f.cond}         
+         | {and} [left]:cond keyword_and [right]:cond_f {-> New cond.and(left.cond,right.cond)}
+         | {or} [left]:cond keyword_or [right]:cond_f   {-> New cond.or(left.cond,right.cond)}
+         ;   
+
+    cond_f {-> cond}=  {paren} token_lparen cond token_rparen  {-> cond.cond}
+           |  {expr} [l]:expr condoperations [r]:expr {-> New cond.expr(l.expr,condoperations,r.expr)}
+           |  {not} keyword_not cond_f                {-> New cond.negative(cond_f.cond)}
+           ;                          
+
+    func_call {-> func_call}= {func_call} id token_lparen expr_list? token_rparen {->New func_call(id,[expr_list.expr])}
+              ;
+
+Abstract Syntax Tree
+    prog = [func_def]:func_def;
+    
+    stmt = {assign} [to]:l_value [expr]:expr
+         | {if} [cond]:cond [then]:stmt* [else]:stmt*
+         | {while} [cond]:cond [body]:stmt*
+         | {func_call} func_call
+         | {return} [expr]:expr?
+         ;
+
+
+
+    expr = {add}  [left]:expr [right]:expr
+         | {sub}  [left]:expr [right]:expr
+         | {mult} [left]:expr [right]:expr
+         | {div}  [left]:expr [right]:expr
+         | {mod}  [left]:expr [right]:expr
+         | {func_call} [func_call]:func_call
+         | {l_value} [l_value]:l_value                   
+         | {charnum} [literal_char]:literal_char         
+         | {number}  [literal_num]:literal_num
+         | {negative} [negative]:expr
+         ; 
+
+    cond = {and} [left]:cond [right]:cond
+           |{or}  [left]:cond [right]:cond 
+           |{expr} [left]:expr [operation]:condoperations [right]:expr
+           |{negative} [negative]:cond ;
+    
+
+
+    /*l_value = {id} [identifier]:id
+            | {string} [literal_string]:literal_string
+            | {larr} [lval]:l_value [arrexpr]:expr
+            ;*/
+    l_value = {id} [identifier]:id [epxrs]:expr*
+            | {string} [literal_string]:literal_string [epxrs]:expr*
+            ;        
+
+    func_call = [func_id]:id [args]:expr* ;
+        
+    header = [func_id]:id [params]:param* [ret_type]:ret_type;
+
+    ret_type = {data_type} [dtype]:data_type | {nothing} [dtype]:keyword_nothing
+             ;
+
+    data_type = {int} keyword_int 
+              | {char} keyword_char  
+       
+             ;         
+   // fpar_def  =  keyword_ref? [fpar_def_list]:id* token_colon fpar_type 
+        
+     //        ;
+    param =     keyword_ref? [parametersoftype]:id* [paramtype]:fpar_type;     
+
+    fpar_type = [type]:data_type token_emptymatr? literal_num*;     
+
+    type = [data_type]:data_type literal_num*;
+              
+    func_decl =   [header]:header; 
+
+    var_def = [variables]:id* [type]:type;
+
+    //func_return = [expr]:expr?;
+
+    func_def = [header]:header [local_def_list]:local_def* [block]:stmt*;
+             
+    local_def = {func_def}  [func_def]:func_def
+              | {func_decl} [func_decl]:func_decl  
+              | {var_def}   [var_def]:var_def  
+              ;

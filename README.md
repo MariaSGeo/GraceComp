@@ -1,4 +1,4 @@
-# Compilers Project Part 2
+# Grace Compiler
 
 ## Instructions
 * #### Compile and Generate jar
